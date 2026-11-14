@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Siba</string>
+	<string>SIBA</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -66,5 +66,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>SIBA usa la cámara para fotografiar tickets, comprobantes y avances de obra que elijas adjuntar.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SIBA permite seleccionar fotografías para adjuntarlas a gastos, documentos e informes de obra.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SIBA usa tu ubicación mientras registras una entrada o salida para verificar que te encuentras en la ubicación autorizada.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SIBA usa Face ID para confirmar tu identidad al registrar asistencias o abrir tu sesión protegida.</string>
 </dict>
 </plist>
