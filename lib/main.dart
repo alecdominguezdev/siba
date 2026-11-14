@@ -209,7 +209,7 @@ class _SibaLaunchViewState extends State<_SibaLaunchView>
             child: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SibaLogo(width: 150),
+                SibaLogo(width: 112),
                 SizedBox(height: 22),
                 SizedBox(
                   width: 24,

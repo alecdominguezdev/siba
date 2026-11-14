@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../theme/siba_theme.dart';
-import '../config/api_config.dart';
+import '../models/mobile_models.dart';
 
 class SibaLogo extends StatelessWidget {
   final double width;
   final bool white;
-  const SibaLogo({super.key, this.width = 112, this.white = false});
+  const SibaLogo({super.key, this.width = 72, this.white = false});
 
   @override
   Widget build(BuildContext context) {
-    Widget fallback() => Text('SIBA', semanticsLabel: 'SIBA', style: TextStyle(color: white ? Colors.white : SibaColors.primaryDeep,fontSize: width / 3.5,fontWeight: FontWeight.w800,letterSpacing: 1.5));
-    if (white) return SizedBox(width: width,child: fallback());
-    return Image.network(ApiConfig.logoUrl,width: width,height: width * .4,fit: BoxFit.contain,alignment: Alignment.centerLeft,errorBuilder: (_, __, ___) => fallback());
+    return Image.asset(
+      'assets/branding/siba_simbolo.png',
+      width: width,
+      height: width,
+      fit: BoxFit.contain,
+      semanticLabel: 'SIBA',
+    );
   }
 }
 
@@ -318,4 +322,19 @@ class _SibaSkeletonState extends State<SibaSkeleton> with SingleTickerProviderSt
           ),
         ),
       );
+}
+
+class SibaProjectTile extends StatelessWidget {
+ final SibaProject project;final VoidCallback onTap;
+ const SibaProjectTile({super.key,required this.project,required this.onTap});
+ @override Widget build(BuildContext context){
+  final progress=project.lastProgress?.clamp(0,100).toDouble();
+  return SibaSurface(onTap:onTap,padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+   Row(children:[Expanded(child:Text(project.folio.isEmpty?'Proyecto #${project.id}':project.folio,style:const TextStyle(color:SibaColors.primary,fontWeight:FontWeight.w700,fontSize:12))),const Icon(Icons.arrow_forward_rounded,size:18,color:SibaColors.muted)]),
+   const SizedBox(height:10),Text(project.title.isEmpty?'Sin nombre':project.title,maxLines:2,overflow:TextOverflow.ellipsis,style:Theme.of(context).textTheme.titleMedium),
+   if(project.company.isNotEmpty)...[const SizedBox(height:6),Text(project.company,maxLines:1,overflow:TextOverflow.ellipsis,style:Theme.of(context).textTheme.bodySmall)],const SizedBox(height:14),
+   Row(children:[Expanded(child:Text(project.status.isNotEmpty?project.status:project.state,style:Theme.of(context).textTheme.bodySmall,maxLines:1,overflow:TextOverflow.ellipsis)),const SizedBox(width:12),Text(progress==null?'Sin informe':'${progress.toStringAsFixed(0)}%',style:const TextStyle(fontWeight:FontWeight.w700,color:SibaColors.primary))]),
+   if(progress!=null)...[const SizedBox(height:8),ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:progress/100,minHeight:5,backgroundColor:SibaColors.primarySoft))],
+  ]));
+ }
 }

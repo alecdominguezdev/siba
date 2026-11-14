@@ -18,10 +18,16 @@ Future<List<SibaUpload>> chooseSibaFiles({bool document=false,bool camera=false}
     if (file == null) return [];
     return [SibaUpload(file.path,file.name,await file.length())];
   }
-  final result = await FilePicker.platform.pickFiles(allowMultiple:!document,type:document?FileType.any:FileType.custom,allowedExtensions:document?null:['pdf','jpg','jpeg','png','webp']);
-  if (result == null) return [];
+  final List<PlatformFile> selected;
+  if (document) {
+    final item = await FilePicker.pickFile(type:FileType.any);
+    selected = item == null ? <PlatformFile>[] : [item];
+  } else {
+    selected = await FilePicker.pickFiles(type:FileType.custom,allowedExtensions:['pdf','jpg','jpeg','png','webp']);
+  }
+  if (selected.isEmpty) return [];
   final files = <SibaUpload>[];
-  for (final item in result.files) {
+  for (final item in selected) {
     if (item.path == null) throw const ApiException('Guarda el archivo en el teléfono y selecciónalo nuevamente.');
     files.add(SibaUpload(item.path!,item.name,await File(item.path!).length()));
   }

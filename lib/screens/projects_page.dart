@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/mobile_models.dart';
@@ -16,6 +17,8 @@ class ProjectsPage extends StatefulWidget {
 
 class _ProjectsPageState extends State<ProjectsPage> {
   final _search = TextEditingController();
+  Timer? _searchDelay;
+  int _generation=0;
   bool _loading = true;
   String? _error;
   List<SibaProject> _projects = const [];
@@ -28,21 +31,24 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   @override
   void dispose() {
+    _searchDelay?.cancel();
     _search.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final generation=++_generation;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      _projects = await ApiClient.instance.projects(search: _search.text);
+      final projects = await ApiClient.instance.projects(search: _search.text);
+      if(mounted&&generation==_generation)setState(()=>_projects=projects);
     } catch (error) {
-      _error = error.toString();
+      if(mounted&&generation==_generation)setState(()=>_error=error.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted&&generation==_generation) setState(() => _loading = false);
     }
   }
 
@@ -64,7 +70,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
             delayMs: 60,
             child: TextField(
               controller: _search,
-              onSubmitted: (_) => _load(),
+              onChanged: (_){_searchDelay?.cancel();_searchDelay=Timer(const Duration(milliseconds:350),_load);},
+              onSubmitted: (_) {_searchDelay?.cancel();_load();},
               decoration: InputDecoration(
                 hintText: 'Buscar folio, empresa, proyecto u OC',
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -72,6 +79,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     ? null
                     : IconButton(
                         onPressed: () {
+                          _searchDelay?.cancel();
                           _search.clear();
                           _load();
                         },
@@ -144,112 +152,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
 }
 
 class _ProjectCard extends StatelessWidget {
-  final SibaProject project;
-  const _ProjectCard({required this.project});
-
-  @override
-  Widget build(BuildContext context) {
-    final state = project.state.trim();
-    final closed = state.toLowerCase() == 'cerrada';
-    final progress = (project.lastProgress ?? 0).clamp(0, 100).toDouble();
-
-    return SibaSurface(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ProjectPage(project: project)),
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SibaIconTile(
-                icon: closed ? Icons.check_rounded : Icons.work_outline_rounded,
-                color: closed ? SibaColors.success : SibaColors.primary,
-                background: closed ? SibaColors.successSoft : SibaColors.primarySoft,
-                size: 46,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      project.folio.isEmpty ? 'Proyecto #${project.id}' : project.folio,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 3),
-                    if (project.client.isNotEmpty)
-                      Text(
-                        'Cliente: ${project.client}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: SibaColors.surfaceSoft,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(Icons.arrow_outward_rounded, size: 17, color: SibaColors.muted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          Text(
-            project.title.isEmpty ? 'Sin descripción' : project.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              SibaBadge(
-                label: state.isEmpty ? 'Sin estado' : state,
-                icon: closed ? Icons.check_circle_outline : Icons.flag_outlined,
-                foreground: closed ? SibaColors.success : null,
-                background: closed ? SibaColors.successSoft : null,
-              ),
-              if ((project.status).trim().isNotEmpty)
-                SibaBadge(
-                  label: project.status,
-                  icon: Icons.info_outline_rounded,
-                  foreground: SibaColors.muted,
-                  background: SibaColors.surfaceSoft,
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text('Avance', style: Theme.of(context).textTheme.bodySmall),
-              const Spacer(),
-              Text('${progress.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
-            ],
-          ),
-          if (project.supervisor.isNotEmpty) ...[
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                const Icon(Icons.person_outline_rounded, size: 17, color: SibaColors.muted),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text('Supervisor: ${project.supervisor}', style: Theme.of(context).textTheme.bodySmall),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+ final SibaProject project;const _ProjectCard({required this.project});
+ @override Widget build(BuildContext context)=>SibaProjectTile(project:project,onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ProjectPage(project:project))));
 }

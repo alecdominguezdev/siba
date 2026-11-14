@@ -842,12 +842,12 @@ class _InventoryFormPageState extends State<InventoryFormPage> {
 
   Future<void> _files() async {
     try {
-      // Mismo selector y retorno List<PlatformFile> usado por document_assignment_page.dart.
-      final files = await FilePicker.pickFiles(
+      final selection = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
       );
-      if (!mounted || files.isEmpty) return;
+      if (!mounted || selection.isEmpty) return;
+      final files = selection;
       final paths = files.map((file) => file.path).whereType<String>().toList();
       if (paths.length != files.length) {
         throw const ApiException(

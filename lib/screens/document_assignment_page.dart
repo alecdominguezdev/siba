@@ -81,11 +81,20 @@ class _DocumentAssignmentPageState extends State<DocumentAssignmentPage> {
   }
 
   Future<void> _pickFiles() async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'xml', 'txt', 'csv', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
-    );
-    _addFiles(files.map((file) => file.path).whereType<String>());
+    try {
+      final selection = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf', 'xml', 'txt', 'csv', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
+      );
+      if (!mounted || selection.isEmpty) return;
+      final paths = selection.map((file) => file.path).whereType<String>().toList();
+      if (paths.length != selection.length) {
+        throw const ApiException('No se pudo leer uno de los archivos. Guárdalo en el teléfono y selecciónalo nuevamente.');
+      }
+      _addFiles(paths);
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    }
   }
 
   Future<void> _pickGallery() async {

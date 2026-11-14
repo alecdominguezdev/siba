@@ -35,7 +35,7 @@ class _LoginPageState extends State<LoginPage> {
       child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:430),
         child:SibaSurface(child:Form(key:_form,
           child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-            const Align(alignment:Alignment.centerLeft,child:SibaLogo(width:170)),
+            const Align(alignment:Alignment.centerLeft,child:SibaLogo(width:96)),
             const SizedBox(height:26),
             Text('Iniciar sesión',style:Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height:8),

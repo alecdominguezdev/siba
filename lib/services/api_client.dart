@@ -228,9 +228,9 @@ class ApiClient {
     required String observations,
     required bool incompleteInformation,
     required String missingInformation,
-    required double latitude,
-    required double longitude,
-    required double accuracyMeters,
+    double? latitude,
+    double? longitude,
+    double? accuracyMeters,
   }) async {
     final response = await http.post(
       ApiConfig.uri('/projects/$projectId/reports'),
@@ -243,9 +243,9 @@ class ApiClient {
         'observations': observations.trim(),
         'incompleteInformation': incompleteInformation,
         'missingInformation': missingInformation.trim(),
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracyMeters': accuracyMeters,
+        if(latitude!=null&&longitude!=null)'latitude': latitude,
+        if(latitude!=null&&longitude!=null)'longitude': longitude,
+        if(accuracyMeters!=null)'accuracyMeters': accuracyMeters,
       }),
     );
     final data = _decode(response);
@@ -267,8 +267,8 @@ class ApiClient {
     for (final filePath in filePaths) {
       request.files.add(await http.MultipartFile.fromPath('photos', filePath));
     }
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await request.send().timeout(const Duration(minutes:3));
+    final response = await http.Response.fromStream(streamed).timeout(const Duration(minutes:2));
     _decode(response);
   }
 
@@ -281,9 +281,9 @@ class ApiClient {
     required String observations,
     required bool incompleteInformation,
     required String missingInformation,
-    required double latitude,
-    required double longitude,
-    required double accuracyMeters,
+    double? latitude,
+    double? longitude,
+    double? accuracyMeters,
   }) async {
     final response = await http.patch(
       ApiConfig.uri('/reports/$reportId'),
@@ -296,9 +296,9 @@ class ApiClient {
         'observations': observations.trim(),
         'incompleteInformation': incompleteInformation,
         'missingInformation': missingInformation.trim(),
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracyMeters': accuracyMeters,
+        if(latitude!=null&&longitude!=null)'latitude': latitude,
+        if(latitude!=null&&longitude!=null)'longitude': longitude,
+        if(accuracyMeters!=null)'accuracyMeters': accuracyMeters,
       }),
     );
     _decode(response);

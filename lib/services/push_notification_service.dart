@@ -64,7 +64,7 @@ class PushNotificationService {
 
   Future<void> _initializeLocalNotifications() async {
     const initialization = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('siba_notification_icon'),
       iOS: DarwinInitializationSettings(),
     );
     await _localNotifications.initialize(
@@ -96,7 +96,7 @@ class PushNotificationService {
             ? 'Nuevo presupuesto pendiente de aprobar.'
             : 'Tienes $count presupuestos pendientes de aprobar.';
     const initialization = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('siba_notification_icon'),
       iOS: DarwinInitializationSettings(),
     );
     await _localNotifications.initialize(initialization);
@@ -115,7 +115,7 @@ class PushNotificationService {
           importance: Importance.high,
           priority: Priority.high,
           number: count,
-          icon: '@mipmap/ic_launcher',
+          icon: 'siba_notification_icon',
         ),
       ),
       payload: budgetId?.toString(),
