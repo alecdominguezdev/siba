@@ -1,0 +1,227 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+import 'screens/login_page.dart';
+import 'screens/shell_page.dart';
+import 'services/api_client.dart';
+import 'services/biometric_service.dart';
+import 'services/push_notification_service.dart';
+import 'services/shared_document_service.dart';
+import 'theme/siba_theme.dart';
+import 'config/api_config.dart';
+import 'widgets/siba_widgets.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (ApiConfig.enablePush && (Platform.isAndroid || Platform.isIOS)) {
+    try { await Firebase.initializeApp(); FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler); } catch (_) { debugPrint('Configura Firebase de SIBA para habilitar notificaciones.'); }
+  }
+  runApp(const SibaMobileApp());
+}
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  await PushNotificationService.showBackgroundBudgetNotification(message);
+}
+
+class SibaMobileApp extends StatelessWidget {
+  const SibaMobileApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'SIBA Móvil',
+      theme: buildSibaTheme(),
+      builder: (context, child) => _KeyboardDismissLayer(
+        child: child ?? const SizedBox.shrink(),
+      ),
+      home: const _BootstrapPage(),
+    );
+  }
+}
+
+class _KeyboardDismissLayer extends StatelessWidget {
+  const _KeyboardDismissLayer({required this.child});
+
+  final Widget child;
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _dismissKeyboard,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          child,
+          if (keyboardHeight > 0)
+            Positioned(
+              right: 16,
+              bottom: keyboardHeight + 16,
+              child: Material(
+                color: SibaColors.primary,
+                elevation: 5,
+                shape: const StadiumBorder(),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: _dismissKeyboard,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.keyboard_hide_rounded, color: Colors.white),
+                        SizedBox(width: 7),
+                        Text(
+                          'Ocultar teclado',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BootstrapPage extends StatefulWidget {
+  const _BootstrapPage();
+
+  @override
+  State<_BootstrapPage> createState() => _BootstrapPageState();
+}
+
+class _BootstrapPageState extends State<_BootstrapPage> {
+  bool _loading = true;
+  bool _authenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      await ApiClient.instance.initialize();
+    } catch (error, stackTrace) {
+      debugPrint('Error iniciando almacenamiento seguro: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    try {
+      await SharedDocumentService.instance.initialize();
+    } catch (error, stackTrace) {
+      debugPrint('Error iniciando archivos compartidos: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    if (ApiClient.instance.hasToken) {
+      if (ApiClient.instance.biometricLoginEnabled) {
+        try {
+          final biometric = await BiometricService.verifyForDeviceAccess(
+            localizedReason: 'Confirma tu identidad para abrir tu sesión de SIBA.',
+          );
+          if (!biometric.verified) {
+            if (mounted) setState(() => _loading = false);
+            return;
+          }
+        } catch (error, stackTrace) {
+          debugPrint('No se pudo validar la protección de inicio: $error');
+          debugPrintStack(stackTrace: stackTrace);
+          if (mounted) setState(() => _loading = false);
+          return;
+        }
+      }
+      try {
+        await ApiClient.instance.me();
+        _authenticated = true;
+      } catch (error, stackTrace) {
+        debugPrint('Error recuperando sesión: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        try {
+          await ApiClient.instance.logout();
+        } catch (logoutError) {
+          debugPrint('Error limpiando sesión: $logoutError');
+        }
+      }
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const _SibaLaunchView();
+    if (_authenticated) return const SibaShellPage();
+    return const LoginPage();
+  }
+}
+
+class _SibaLaunchView extends StatefulWidget {
+  const _SibaLaunchView();
+
+  @override
+  State<_SibaLaunchView> createState() => _SibaLaunchViewState();
+}
+
+class _SibaLaunchViewState extends State<_SibaLaunchView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+      lowerBound: .96,
+      upperBound: 1.03,
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(
+          child: ScaleTransition(
+            scale: _controller,
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SibaLogo(width: 150),
+                SizedBox(height: 22),
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: SibaColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
