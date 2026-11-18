@@ -219,6 +219,31 @@ class ApiClient {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> projectReportSettings(int projectId) async {
+    return _decode(await http.get(ApiConfig.uri('/projects/$projectId/report-settings'), headers: _headers()));
+  }
+
+  Future<int> saveReportDevelopment(int reportId, int revision, Map<String, String> fields) async {
+    final data = _decode(await http.put(ApiConfig.uri('/reports/$reportId/development'),
+      headers: _headers(), body: jsonEncode({'revision': revision, 'fields': fields})));
+    return (data['revision'] as num).toInt();
+  }
+
+  Future<int> saveReportExecutive(int reportId, int revision, Map<String, String> fields) async {
+    final data = _decode(await http.put(ApiConfig.uri('/reports/$reportId/executive'),
+      headers: _headers(), body: jsonEncode({'revision': revision, 'fields': fields})));
+    return (data['revision'] as num).toInt();
+  }
+
+  Future<int> uploadReportAerial(int reportId, int revision, String filePath) async {
+    final request = http.MultipartRequest('POST', ApiConfig.uri('/reports/$reportId/development/aerial'));
+    request.headers.addAll({'Accept': 'application/json', 'Authorization': 'Bearer $_token'});
+    request.fields['revision'] = '$revision';
+    request.files.add(await http.MultipartFile.fromPath('aerial', filePath));
+    final data = _decode(await http.Response.fromStream(await request.send()));
+    return (data['revision'] as num).toInt();
+  }
+
   Future<int> createReport({
     required int projectId,
     required double progress,
@@ -851,3 +876,4 @@ class ApiClient {
     return InventoryItem.fromJson(saved);
   }
 }
+

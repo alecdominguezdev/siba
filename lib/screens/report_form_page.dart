@@ -27,6 +27,20 @@ class _ReportFormPageState extends State<ReportFormPage> {
   final _missingInformation = TextEditingController();
   final _progressInput = TextEditingController();
 
+  final _location = TextEditingController();
+  final _details = <String, TextEditingController>{
+    for (final name in ['summary', 'scope', 'methodology', 'responsibles', 'crew', 'equipment', 'closeout', 'incidents', 'accidents'])
+      name: TextEditingController(),
+  };
+  String _safeSince = '';
+  String _lastAccident = '';
+  String _titular = '';
+  String? _settingsError;
+  bool _loadingSettings = true;
+  int _developmentRevision = 0;
+  int _executiveRevision = 0;
+  bool _hasAerial = false;
+  XFile? _aerial;
   double _progress = 0;
   bool _incomplete = false;
   bool _saving = false;
@@ -40,10 +54,13 @@ class _ReportFormPageState extends State<ReportFormPage> {
     // Cada informe parte del último avance confirmado del proyecto; nunca vuelve a 0% por defecto.
     _progress = (widget.initialProgress ?? widget.project.lastProgress ?? 0).clamp(0, 100).toDouble();
     _progressInput.text = _progress.toStringAsFixed(0);
+    _loadSettings();
   }
 
   @override
   void dispose() {
+    _location.dispose();
+    for (final controller in _details.values) { controller.dispose(); }
     _workDone.dispose();
     _pending.dispose();
     _incidents.dispose();
@@ -51,6 +68,108 @@ class _ReportFormPageState extends State<ReportFormPage> {
     _missingInformation.dispose();
     _progressInput.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    setState(() { _loadingSettings = true; _settingsError = null; });
+    try {
+      final settings = await ApiClient.instance.projectReportSettings(widget.project.id);
+      if (!mounted) return;
+      final fields = Map<String, dynamic>.from(settings['fields'] as Map);
+      setState(() {
+        _location.text = '${fields['location'] ?? ''}';
+        _safeSince = '${fields['safeSince'] ?? ''}';
+        _lastAccident = '${fields['lastAccident'] ?? ''}';
+        _developmentRevision = (settings['revision'] as num).toInt();
+        _hasAerial = settings['hasAerial'] == true;
+        _titular = '${settings['titular'] ?? ''}';
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _settingsError = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _settingsError = 'No se pudieron cargar los datos de la obra.');
+    } finally {
+      if (mounted) setState(() => _loadingSettings = false);
+    }
+  }
+
+  Future<void> _selectSafetyDate(bool accident) async {
+    final now = DateTime.now();
+    final value = accident ? _lastAccident : _safeSince;
+    final earliest = DateTime(2000);
+    final latest = DateTime(now.year, now.month, now.day);
+    final stored = DateTime.tryParse(value) ?? latest;
+    final initial = stored.isBefore(earliest) ? earliest : stored.isAfter(latest) ? latest : stored;
+    final selected = await showDatePicker(context: context,
+      initialDate: initial, firstDate: earliest, lastDate: latest);
+    if (selected == null || !mounted) return;
+    final formatted = '${selected.year}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+    setState(() { if (accident) { _lastAccident = formatted; } else { _safeSince = formatted; } });
+  }
+
+  Future<void> _pickAerial() async {
+    try {
+      final photo = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2400);
+      if (photo == null) return;
+      if (await photo.length() > 6 * 1024 * 1024) {
+        throw const ApiException('La imagen aérea debe pesar hasta 6 MB.');
+      }
+      if (mounted) setState(() => _aerial = photo);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+        error is ApiException ? error.message : 'No se pudo seleccionar la imagen aérea.')));
+    }
+  }
+
+  Widget _reportDetails() {
+    final date = DateTime.tryParse(_lastAccident.isEmpty ? _safeSince : _lastAccident);
+    final now = DateTime.now();
+    final elapsed = date == null ? null : DateTime.utc(now.year, now.month, now.day).difference(DateTime.utc(date.year, date.month, date.day)).inDays;
+    return SibaSurface(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Text('Datos de la obra', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 12),
+      if (_loadingSettings) const LinearProgressIndicator(),
+      if (_settingsError != null) ...[
+        Text(_settingsError!),
+        TextButton(onPressed: _loadSettings, child: const Text('Volver a cargar')),
+      ],
+      if (!_loadingSettings && _settingsError == null) ...[
+        Text('Supervisor titular: $_titular'),
+        const SizedBox(height: 12),
+        TextField(controller: _location, maxLength: 260, decoration: const InputDecoration(labelText: 'Ubicación de la obra')),
+        OutlinedButton.icon(onPressed: _pickAerial, icon: const Icon(Icons.landscape_outlined),
+          label: Text(_aerial != null ? 'Cambiar imagen aérea seleccionada' : _hasAerial ? 'Reemplazar imagen aérea' : 'Agregar imagen aérea')),
+        if (_aerial != null) Padding(padding: const EdgeInsets.only(top: 8),
+          child: Image.file(File(_aerial!.path), height: 140, fit: BoxFit.contain)),
+        const SizedBox(height: 16),
+        const Text('Seguridad en obra', style: TextStyle(fontWeight: FontWeight.w700)),
+        TextButton(onPressed: () => _selectSafetyDate(false),
+          child: Text(_safeSince.isEmpty ? 'Elegir inicio del conteo sin accidentes' : 'Inicio del conteo: $_safeSince')),
+        TextButton(onPressed: () => _selectSafetyDate(true),
+          child: Text(_lastAccident.isEmpty ? 'Registrar fecha de un accidente' : 'Último accidente: $_lastAccident')),
+        if (_lastAccident.isNotEmpty) TextButton(onPressed: () => setState(() => _lastAccident = ''),
+          child: const Text('Quitar fecha de accidente capturada')),
+        if (elapsed != null && elapsed >= 0) Text('$elapsed días calendario sin accidentes'),
+        const SizedBox(height: 12),
+        for (final entry in <String, String>{'incidents': 'Incidentes de esta visita', 'accidents': 'Accidentes de esta visita'}.entries) ...[
+          TextField(controller: _details[entry.key], keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: entry.value, hintText: 'Vacío si está pendiente de confirmar')),
+          const SizedBox(height: 12),
+        ],
+        const Text('Confirma las fechas y cantidades. El PDF calcula los días hasta la fecha de la visita.',
+          style: TextStyle(fontSize: 12, color: SibaColors.muted)),
+        ExpansionTile(title: const Text('Contenido del informe ejecutivo'), children: [
+          for (final entry in <String, String>{
+            'summary': 'Resumen', 'scope': 'Alcance', 'methodology': 'Metodología',
+            'responsibles': 'Responsables y cargos', 'crew': 'Personal y cantidades',
+            'equipment': 'Maquinaria y equipo', 'closeout': 'Cierre y siguientes pasos',
+          }.entries) Padding(padding: const EdgeInsets.only(bottom: 12),
+            child: TextField(controller: _details[entry.key], minLines: 2, maxLines: 5,
+              maxLength: entry.key == 'summary' ? 2200 : ['responsibles','crew','equipment'].contains(entry.key) ? 2400 : 3200,
+              decoration: InputDecoration(labelText: entry.value))),
+        ]),
+      ],
+    ]));
   }
 
   Future<void> _takePhoto() async {
@@ -85,7 +204,22 @@ class _ReportFormPageState extends State<ReportFormPage> {
   }
 
   Future<void> _submit() async {
-    if (_saving) return;
+    if (_saving || _loadingSettings || _settingsError != null) return;
+    if (_lastAccident.isNotEmpty && (_safeSince.isEmpty || _lastAccident.compareTo(_safeSince) < 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Revisa la fecha inicial y la del accidente.')));
+      return;
+    }
+    for (final key in ['incidents', 'accidents']) {
+      final value = _details[key]!.text.trim();
+      if (value.isNotEmpty && !RegExp(r'^\d{1,6}$').hasMatch(value)) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Captura cantidades enteras a partir de cero.')));
+        return;
+      }
+    }
+    if ((int.tryParse(_details['accidents']!.text.trim()) ?? 0) > 0 && _lastAccident.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Indica la fecha del accidente para actualizar el conteo.')));
+      return;
+    }
     final enteredProgress = double.tryParse(_progressInput.text.trim().replaceAll(',', '.'));
     if (enteredProgress == null || enteredProgress < 0 || enteredProgress > 100) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,6 +267,18 @@ class _ReportFormPageState extends State<ReportFormPage> {
       }
       if (reportId <= 0) throw Exception('No se pudo crear el informe.');
 
+      _developmentRevision = await ApiClient.instance.saveReportDevelopment(reportId, _developmentRevision, {
+        'location': _location.text.trim(), 'safeSince': _safeSince, 'lastAccident': _lastAccident,
+      });
+      if (_aerial != null) {
+        _developmentRevision = await ApiClient.instance.uploadReportAerial(reportId, _developmentRevision, _aerial!.path);
+        _hasAerial = true;
+        _aerial = null;
+      }
+      _executiveRevision = await ApiClient.instance.saveReportExecutive(reportId, _executiveRevision, {
+        for (final entry in _details.entries) entry.key: entry.value.text.trim(),
+      });
+
       final pendingPhotos=_photos.where((p)=>!_uploadedPaths.contains(p.path)).toList();
       if (pendingPhotos.isNotEmpty) {
         await ApiClient.instance.uploadPhotos(
@@ -172,6 +318,7 @@ class _ReportFormPageState extends State<ReportFormPage> {
       _ProjectHeader(folio:widget.project.folio.isEmpty?'Proyecto #${widget.project.id}':widget.project.folio,title:widget.project.title),const SizedBox(height:14),
       SibaSurface(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('Avance de la obra',style:TextStyle(fontWeight:FontWeight.w700)),const SizedBox(height:8),Text('Anterior: ${(widget.initialProgress??widget.project.lastProgress??0).toStringAsFixed(0)}%',style:const TextStyle(color:SibaColors.muted,fontSize:12)),const SizedBox(height:12),TextFormField(controller:_progressInput,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Avance actual',suffixText:'%',hintText:'0 a 100'))])),const SizedBox(height:20),
       _Field(controller:_workDone,label:'Trabajo realizado',hint:'¿Qué se realizó en la obra?',minLines:3),const SizedBox(height:24),
+      _reportDetails(),const SizedBox(height:24),
       Row(children:[const Expanded(child:Text('Fotografías',style:TextStyle(fontSize:16,fontWeight:FontWeight.w700))),Text('${_photos.length}/10',style:const TextStyle(color:SibaColors.muted))]),const SizedBox(height:12),
       Wrap(spacing:10,runSpacing:10,children:[FilledButton.icon(onPressed:_saving?null:_takePhoto,icon:const Icon(Icons.photo_camera_outlined,size:18),label:const Text('Tomar foto')),OutlinedButton.icon(onPressed:_saving?null:_pickPhotos,icon:const Icon(Icons.photo_library_outlined,size:18),label:const Text('Galería'))]),
       if(_photos.isNotEmpty)...[const SizedBox(height:14),GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:_photos.length,gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:3,crossAxisSpacing:8,mainAxisSpacing:8),itemBuilder:(context,index)=>Stack(fit:StackFit.expand,children:[ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.file(File(_photos[index].path),fit:BoxFit.cover)),Positioned(right:3,top:3,child:IconButton(tooltip:_uploadedPaths.contains(_photos[index].path)?'Fotografía guardada':'Quitar fotografía',style:IconButton.styleFrom(backgroundColor:Colors.black54,foregroundColor:Colors.white),onPressed:_saving||_uploadedPaths.contains(_photos[index].path)?null:()=>setState(()=>_photos.removeAt(index)),icon:Icon(_uploadedPaths.contains(_photos[index].path)?Icons.check:Icons.close,size:17)))]))],const SizedBox(height:24),
@@ -179,7 +326,7 @@ class _ReportFormPageState extends State<ReportFormPage> {
         _Field(controller:_pending,label:'Pendientes',hint:'Trabajos por realizar',minLines:2),const SizedBox(height:14),_Field(controller:_incidents,label:'Incidencias',hint:'¿Hubo algún percance?',minLines:2),const SizedBox(height:14),_Field(controller:_observations,label:'Observaciones',hint:'Información adicional',minLines:2),const SizedBox(height:10),
         SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Falta información'),value:_incomplete,onChanged:(v)=>setState(()=>_incomplete=v)),if(_incomplete)_Field(controller:_missingInformation,label:'Información faltante',hint:'¿Qué hace falta?',minLines:2),
       ])),
-    ])),bottomNavigationBar:SafeArea(top:false,minimum:const EdgeInsets.fromLTRB(20,10,20,14),child:FilledButton.icon(onPressed:_saving?null:_submit,icon:_saving?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.save_outlined),label:Text(_saving?'Guardando…':'Guardar informe')))));
+    ])),bottomNavigationBar:SafeArea(top:false,minimum:const EdgeInsets.fromLTRB(20,10,20,14),child:FilledButton.icon(onPressed:_saving||_loadingSettings||_settingsError!=null?null:_submit,icon:_saving?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.save_outlined),label:Text(_saving?'Guardando…':'Guardar informe')))));
   }
 }
 
@@ -249,3 +396,4 @@ class _Field extends StatelessWidget {
         ),
       );
 }
+

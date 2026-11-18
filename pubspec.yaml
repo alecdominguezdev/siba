@@ -2,7 +2,7 @@
 name: siba
 description: Aplicación de obra SIBA
 publish_to: none
-version: 1.0.11+12
+version: 1.0.12+14
 environment:
   sdk: ^3.13.5
 dependencies:
@@ -28,3 +28,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/siba_simbolo.png
+
